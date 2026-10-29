@@ -1,0 +1,243 @@
+[
+  {
+    "id": 2,
+    "name": "Ciudad Autónoma de Buenos Aires",
+    "localities": [
+      "Almagro",
+      "Balvanera",
+      "Belgrano",
+      "Boedo",
+      "Caballito",
+      "Flores",
+      "Floresta",
+      "Liniers",
+      "Mataderos",
+      "Palermo",
+      "Parque Patricios",
+      "Recoleta",
+      "San Telmo",
+      "Villa Crespo",
+      "Villa Devoto",
+      "Villa Lugano",
+      "Villa Urquiza"
+    ]
+  },
+  {
+    "id": 6,
+    "name": "Buenos Aires",
+    "localities": [
+      "Almirante Brown",
+      "Avellaneda",
+      "Bahía Blanca",
+      "Berazategui",
+      "Esteban Echeverría",
+      "Ezeiza",
+      "Florencio Varela",
+      "General San Martín",
+      "La Matanza",
+      "La Plata",
+      "Lanús",
+      "Lomas de Zamora",
+      "Mar del Plata",
+      "Merlo",
+      "Moreno",
+      "Morón",
+      "Pilar",
+      "Quilmes",
+      "San Isidro",
+      "Tigre",
+      "Tres de Febrero",
+      "Vicente López"
+    ]
+  },
+  {
+    "id": 10,
+    "name": "Catamarca",
+    "localities": [
+      "San Fernando del Valle de Catamarca"
+    ]
+  },
+  {
+    "id": 14,
+    "name": "Córdoba",
+    "localities": [
+      "Córdoba Capital",
+      "Río Cuarto",
+      "Villa Carlos Paz",
+      "Villa María",
+      "Alta Gracia"
+    ]
+  },
+  {
+    "id": 18,
+    "name": "Corrientes",
+    "localities": [
+      "Corrientes Capital",
+      "Goya"
+    ]
+  },
+  {
+    "id": 22,
+    "name": "Chaco",
+    "localities": [
+      "Resistencia",
+      "Presidencia Roque Sáenz Peña"
+    ]
+  },
+  {
+    "id": 26,
+    "name": "Chubut",
+    "localities": [
+      "Rawson",
+      "Comodoro Rivadavia",
+      "Trelew",
+      "Puerto Madryn"
+    ]
+  },
+  {
+    "id": 30,
+    "name": "Entre Ríos",
+    "localities": [
+      "Paraná",
+      "Concordia",
+      "Gualeguaychú"
+    ]
+  },
+  {
+    "id": 34,
+    "name": "Formosa",
+    "localities": [
+      "Formosa Capital"
+    ]
+  },
+  {
+    "id": 38,
+    "name": "Jujuy",
+    "localities": [
+      "San Salvador de Jujuy"
+    ]
+  },
+  {
+    "id": 42,
+    "name": "La Pampa",
+    "localities": [
+      "Santa Rosa",
+      "General Pico"
+    ]
+  },
+  {
+    "id": 46,
+    "name": "La Rioja",
+    "localities": [
+      "La Rioja Capital"
+    ]
+  },
+  {
+    "id": 50,
+    "name": "Mendoza",
+    "localities": [
+      "Mendoza Capital",
+      "Godoy Cruz",
+      "Guaymallén",
+      "Las Heras",
+      "Maipú",
+      "San Rafael"
+    ]
+  },
+  {
+    "id": 54,
+    "name": "Misiones",
+    "localities": [
+      "Posadas",
+      "Oberá",
+      "Eldorado"
+    ]
+  },
+  {
+    "id": 58,
+    "name": "Neuquén",
+    "localities": [
+      "Neuquén Capital",
+      "Cutral Có",
+      "San Martín de los Andes"
+    ]
+  },
+  {
+    "id": 62,
+    "name": "Río Negro",
+    "localities": [
+      "Viedma",
+      "San Carlos de Bariloche",
+      "General Roca",
+      "Cipolletti"
+    ]
+  },
+  {
+    "id": 66,
+    "name": "Salta",
+    "localities": [
+      "Salta Capital",
+      "San Ramón de la Nueva Orán"
+    ]
+  },
+  {
+    "id": 70,
+    "name": "San Juan",
+    "localities": [
+      "San Juan Capital",
+      "Rawson (San Juan)"
+    ]
+  },
+  {
+    "id": 74,
+    "name": "San Luis",
+    "localities": [
+      "San Luis Capital",
+      "Villa Mercedes"
+    ]
+  },
+  {
+    "id": 78,
+    "name": "Santa Cruz",
+    "localities": [
+      "Río Gallegos",
+      "Caleta Olivia"
+    ]
+  },
+  {
+    "id": 82,
+    "name": "Santa Fe",
+    "localities": [
+      "Rosario",
+      "Santa Fe Capital",
+      "Rafaela",
+      "Venado Tuerto",
+      "Villa Gobernador Gálvez"
+    ]
+  },
+  {
+    "id": 86,
+    "name": "Santiago del Estero",
+    "localities": [
+      "Santiago del Estero Capital",
+      "La Banda"
+    ]
+  },
+  {
+    "id": 90,
+    "name": "Tucumán",
+    "localities": [
+      "San Miguel de Tucumán",
+      "Yerba Buena",
+      "Tafí Viejo"
+    ]
+  },
+  {
+    "id": 94,
+    "name": "Tierra del Fuego",
+    "localities": [
+      "Ushuaia",
+      "Río Grande"
+    ]
+  }
+]

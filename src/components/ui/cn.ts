@@ -1,0 +1,4 @@
+/** Une clases condicionales (sin dependencias). */
+export function cn(...parts: (string | false | null | undefined)[]): string {
+  return parts.filter(Boolean).join(" ");
+}

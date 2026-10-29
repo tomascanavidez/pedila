@@ -1,0 +1,67 @@
+# CI de PEDILA: lint, typecheck, tests unitarios y de integración (con MariaDB) y build.
+# Además publica el build listo para el servidor (pedila-build.tar.gz) como artefacto:
+# sirve para VPS con poca RAM que no conviene que compilen (ver README › Despliegue).
+name: CI y build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:root@127.0.0.1:3306/pedila_ci
+      DATABASE_URL_TEST: mysql://root:root@127.0.0.1:3306/pedila_test
+      AUTH_SECRET: solo-para-ci-no-usar-en-produccion
+      APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Dependencias
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests unitarios
+        run: npm run test:unit
+
+      - name: Tests de integración (MariaDB)
+        run: npm run test:integration
+
+      - name: Build de producción
+        run: npm run build
+        env:
+          NEXT_DEPLOYMENT_ID: ${{ github.sha }}
+
+      - name: Empaquetar el build para el servidor
+        run: |
+          echo "${GITHUB_SHA::7}" > COMMIT
+          tar --exclude='.next/standalone/.env' -czf pedila-build.tar.gz .next/standalone dist prisma prisma.config.ts package.json package-lock.json deploy scripts public COMMIT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pedila-build-${{ github.sha }}
+          path: pedila-build.tar.gz
+          retention-days: 14

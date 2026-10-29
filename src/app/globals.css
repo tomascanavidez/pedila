@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+/*
+ * Paleta PEDILA
+ *  - Amarillo de marca (#FFD600): botones primarios, acentos, barras de progreso, badges.
+ *  - Blanco: fondos.  - Negro (#111111): textos, íconos, bordes y detalles.
+ *  - Grises neutros solo para estados deshabilitados y separadores.
+ * Contraste AA: siempre texto NEGRO sobre amarillo (nunca blanco sobre amarillo).
+ *   #111111 sobre #FFD600 ≈ 14,9:1 · #111111 sobre #FFFFFF ≈ 18,9:1
+ */
+@theme {
+  --color-brand: #ffd600;
+  --color-brand-dark: #e6c100;
+  --color-brand-soft: #fff7cc;
+  --color-ink: #111111;
+  --color-paper: #ffffff;
+  --color-muted: #5c5c5c; /* texto secundario: 6,6:1 sobre blanco */
+  --color-line: #e5e5e5;
+  --color-disabled: #a3a3a3;
+  --color-disabled-bg: #f2f2f2;
+  --color-danger: #b00020; /* solo mensajes de error: 6,9:1 sobre blanco */
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.125rem;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    color-scheme: light;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Foco visible y de alto contraste para navegación con teclado. */
+  :focus-visible {
+    outline: 3px solid var(--color-ink);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  ::selection {
+    background: var(--color-brand);
+    color: var(--color-ink);
+  }
+  input[type="number"]::-webkit-inner-spin-button {
+    opacity: 1;
+  }
+}
+
+@layer components {
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0.5rem;
+    z-index: 100;
+    background: var(--color-brand);
+    color: var(--color-ink);
+    padding: 0.75rem 1rem;
+    font-weight: 700;
+    border: 2px solid var(--color-ink);
+    border-radius: 0.75rem;
+  }
+  .skip-link:focus {
+    left: 0.5rem;
+  }
+  .field-input {
+    @apply block w-full rounded-xl border-2 border-ink bg-paper px-4 py-3 text-base text-ink placeholder:text-muted;
+    min-height: 48px;
+  }
+  .field-input:disabled {
+    @apply border-disabled bg-disabled-bg text-disabled;
+  }
+  .field-input[aria-invalid="true"] {
+    @apply border-danger;
+  }
+  .card {
+    @apply rounded-2xl border-2 border-ink bg-paper;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

@@ -1,0 +1,763 @@
+// =============================================================================
+// PEDILA — modelo de datos
+// -----------------------------------------------------------------------------
+// Base por defecto: MySQL / MariaDB (administrable desde Ferozo / phpMyAdmin).
+//
+// Para cambiar a PostgreSQL:
+//   1. provider = "postgresql" en el bloque datasource.
+//   2. Reemplazar @prisma/adapter-mariadb por @prisma/adapter-pg en src/server/db.ts.
+//   3. Ajustar el único SQL crudo de bloqueo de fila (src/server/repos/locks.ts),
+//      que usa comillas invertidas de MySQL.
+//   4. Borrar prisma/migrations y generar una migración nueva (prisma migrate dev).
+//   La lógica de negocio (src/domain y src/server/services) no cambia.
+//
+// Convenciones:
+//   - Todos los montos son enteros en CENTAVOS (BigInt → BIGINT). Nunca floats.
+//   - Los porcentajes se guardan en PUNTOS BÁSICOS (1 % = 100 bps).
+//   - Las fechas se guardan en UTC; la UI las muestra en America/Argentina/Buenos_Aires.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  PREVENTISTA
+  COMERCIO
+}
+
+enum UserStatus {
+  ACTIVO
+  SUSPENDIDO
+}
+
+enum DistributorStatus {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+}
+
+enum IvaCondition {
+  RESPONSABLE_INSCRIPTO
+  MONOTRIBUTO
+  EXENTO
+  CONSUMIDOR_FINAL
+}
+
+enum SaleUnit {
+  UNIDAD
+  BULTO
+}
+
+enum PoolStatus {
+  BORRADOR
+  PENDIENTE_APROBACION
+  ABIERTO
+  COMPLETO
+  CERRADO_PAGADO
+  EN_ENTREGA
+  ENTREGADO
+  VENCIDO_SIN_COMPLETAR
+  CANCELADO
+}
+
+enum ParticipationStatus {
+  COMPROMETIDA
+  PENDIENTE_PAGO
+  PAGADA
+  ENTREGADA
+  RETIRADA
+  LIBERADA
+  CANCELADA
+}
+
+enum CommissionMode {
+  DESCONTAR_AL_PREVENTISTA
+  SUMAR_AL_COMERCIO
+}
+
+enum CommissionSource {
+  GLOBAL
+  CATEGORIA
+  PREVENTISTA
+}
+
+enum UnpaidRule {
+  REABRIR
+  CERRAR_CON_PAGADO
+}
+
+enum PaymentKind {
+  POOL
+  PEDIDO
+}
+
+enum PaymentStatus {
+  PENDIENTE
+  EN_PROCESO
+  APROBADO
+  VENCIDO
+  CANCELADO
+  REINTEGRADO
+}
+
+enum OrderStatus {
+  PENDIENTE_PAGO
+  PAGADO
+  EN_ENTREGA
+  ENTREGADO
+  CANCELADO
+}
+
+enum SettlementStatus {
+  PENDIENTE
+  LIQUIDADO
+}
+
+enum SettlementSource {
+  POOL
+  PEDIDO
+}
+
+enum DisputeStatus {
+  ABIERTA
+  EN_REVISION
+  RESUELTA
+  RECHAZADA
+}
+
+enum JobStatus {
+  PENDIENTE
+  PROCESANDO
+  COMPLETADO
+  FALLIDO
+}
+
+// -----------------------------------------------------------------------------
+// Usuarios, negocios y zonas
+// -----------------------------------------------------------------------------
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique @db.VarChar(191)
+  name         String     @db.VarChar(120)
+  phone        String?    @db.VarChar(40)
+  passwordHash String?    @db.VarChar(100)
+  role         Role
+  status       UserStatus @default(ACTIVO)
+  image        String?    @db.VarChar(500)
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  business            Business?
+  accounts            Account[]
+  notifications       Notification[]
+  passwordResets      PasswordResetToken[]
+  auditLogs           AuditLog[]           @relation("AuditActor")
+  commissionChanges   CommissionChange[]
+  disputesOpened      Dispute[]            @relation("DisputeOpener")
+  disputesResolved    Dispute[]            @relation("DisputeResolver")
+  settlementsPaidOut  Settlement[]         @relation("SettlementPayer")
+  approvedBusinesses  Business[]           @relation("BusinessApprover")
+  configUpdates       PlatformConfig[]
+
+  @@index([role, status])
+  @@index([createdAt])
+}
+
+/// Cuentas OAuth vinculadas (login con Google).
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  provider          String   @db.VarChar(50)
+  providerAccountId String   @db.VarChar(191)
+  createdAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique @db.VarChar(64)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Datos fiscales y comerciales. Un comercio o un preventista tiene exactamente uno.
+model Business {
+  id           String       @id @default(cuid())
+  userId       String       @unique
+  legalName    String       @db.VarChar(160) // razón social
+  tradeName    String       @db.VarChar(160) // nombre de fantasía
+  cuit         String       @unique @db.VarChar(11)
+  ivaCondition IvaCondition
+  street       String       @db.VarChar(160)
+  streetNumber String       @db.VarChar(20)
+  floorApt     String?      @db.VarChar(40)
+  postalCode   String?      @db.VarChar(10)
+  provinceId   Int
+  localityId   Int
+  phone        String?      @db.VarChar(40)
+  description  String?      @db.Text
+
+  // Solo preventistas
+  distributorStatus DistributorStatus?
+  approvedAt        DateTime?
+  approvedById      String?
+  rejectionReason   String?            @db.VarChar(500)
+  commissionBps     Int?               // override de comisión por preventista
+  ratingAvg         Float?
+  ratingCount       Int                @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy User?                 @relation("BusinessApprover", fields: [approvedById], references: [id])
+  province   Province              @relation(fields: [provinceId], references: [id])
+  locality   Locality              @relation(fields: [localityId], references: [id])
+  coverage   DistributorCoverage[]
+
+  products             Product[]
+  poolsAsDistributor   Pool[]
+  participations       Participation[]
+  ordersAsCommerce     Order[]         @relation("OrderCommerce")
+  ordersAsDistributor  Order[]         @relation("OrderDistributor")
+  payments             Payment[]
+  settlements          Settlement[]
+  ratingsGiven         Rating[]        @relation("RatingCommerce")
+  ratingsReceived      Rating[]        @relation("RatingDistributor")
+  disputesAsCommerce   Dispute[]       @relation("DisputeCommerce")
+  disputesAsDistributor Dispute[]      @relation("DisputeDistributor")
+
+  @@index([distributorStatus])
+  @@index([provinceId, localityId])
+}
+
+/// Provincias argentinas (id = código INDEC).
+model Province {
+  id         Int        @id
+  name       String     @unique @db.VarChar(80)
+  localities Locality[]
+  businesses Business[]
+  poolZones  PoolZone[]
+  coverage   DistributorCoverage[]
+}
+
+model Locality {
+  id         Int      @id @default(autoincrement())
+  name       String   @db.VarChar(120)
+  provinceId Int
+  active     Boolean  @default(true)
+  province   Province @relation(fields: [provinceId], references: [id])
+  businesses Business[]
+  poolZones  PoolZone[]
+  coverage   DistributorCoverage[]
+
+  @@unique([provinceId, name])
+}
+
+/// Zonas donde reparte un preventista. localityId nulo = toda la provincia.
+model DistributorCoverage {
+  id         Int       @id @default(autoincrement())
+  businessId String
+  provinceId Int
+  localityId Int?
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  province   Province  @relation(fields: [provinceId], references: [id])
+  locality   Locality? @relation(fields: [localityId], references: [id])
+
+  @@index([businessId])
+  @@index([provinceId, localityId])
+}
+
+// -----------------------------------------------------------------------------
+// Configuración de la plataforma y comisiones
+// -----------------------------------------------------------------------------
+
+/// Fila única (id = 1) con la configuración operativa editable desde el panel admin.
+model PlatformConfig {
+  id                       Int            @id @default(1)
+  globalCommissionBps      Int            @default(800)
+  commissionMode           CommissionMode @default(DESCONTAR_AL_PREVENTISTA)
+  catalogCommissionEnabled Boolean        @default(false)
+  paymentWindowHours       Int            @default(48)
+  unpaidRule               UnpaidRule     @default(REABRIR)
+  reopenExtensionHours     Int            @default(48)
+  expiredDecisionHours     Int            @default(48)
+  poolApprovalRequired     Boolean        @default(false)
+  updatedAt                DateTime       @updatedAt
+  updatedById              String?
+  updatedBy                User?          @relation(fields: [updatedById], references: [id])
+}
+
+/// Historial de cambios de comisión: quién, cuándo, valor anterior y nuevo.
+model CommissionChange {
+  id          String   @id @default(cuid())
+  scope       String   @db.VarChar(20) // GLOBAL | CATEGORIA | PREVENTISTA | MODO
+  targetId    String?  @db.VarChar(40)
+  targetLabel String   @db.VarChar(200)
+  oldValue    String?  @db.VarChar(60)
+  newValue    String?  @db.VarChar(60)
+  changedById String
+  createdAt   DateTime @default(now())
+  changedBy   User     @relation(fields: [changedById], references: [id])
+
+  @@index([createdAt])
+  @@index([scope, targetId])
+}
+
+model Category {
+  id            String    @id @default(cuid())
+  name          String    @unique @db.VarChar(80)
+  slug          String    @unique @db.VarChar(80)
+  icon          String?   @db.VarChar(40)
+  sortOrder     Int       @default(0)
+  active        Boolean   @default(true)
+  commissionBps Int?      // override de comisión por categoría
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  products      Product[]
+  pools         Pool[]
+}
+
+// -----------------------------------------------------------------------------
+// Catálogo
+// -----------------------------------------------------------------------------
+
+model Product {
+  id               String   @id @default(cuid())
+  distributorId    String
+  categoryId       String
+  name             String   @db.VarChar(160)
+  brand            String?  @db.VarChar(80)
+  description      String?  @db.Text
+  sku              String   @db.VarChar(60)
+  ean              String?  @db.VarChar(14)
+  saleUnit         SaleUnit @default(UNIDAD)
+  unitsPerPack     Int      @default(1)
+  priceCents       BigInt   // precio por unidad de venta (catálogo)
+  retailPriceCents BigInt?  // precio minorista de referencia por unidad de venta
+  minOrderQty      Int      @default(1)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  distributor Business       @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  category    Category       @relation(fields: [categoryId], references: [id])
+  images      ProductImage[]
+  pools       Pool[]
+  orderItems  OrderItem[]
+
+  @@unique([distributorId, sku])
+  @@index([categoryId, active])
+  @@index([distributorId, active])
+  @@index([ean])
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  key       String   @db.VarChar(200) // ruta relativa en el storage (imagen grande)
+  thumbKey  String   @db.VarChar(200) // miniatura
+  width     Int
+  height    Int
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
+}
+
+// -----------------------------------------------------------------------------
+// Pools de compra mayorista
+// -----------------------------------------------------------------------------
+
+model Pool {
+  id            String     @id @default(cuid())
+  distributorId String
+  productId     String
+  categoryId    String
+  title         String     @db.VarChar(160)
+  description   String?    @db.Text
+  status        PoolStatus @default(BORRADOR)
+  saleUnit      SaleUnit   @default(UNIDAD)
+
+  // Precios (centavos). priceInputCents es lo que cargó el preventista; el resto
+  // se calcula con src/domain/commission.ts y se CONGELA al publicar.
+  priceInputCents      BigInt
+  unitPriceCents       BigInt // lo que paga el comercio por unidad
+  commissionUnitCents  BigInt // comisión PEDILA por unidad
+  netUnitCents         BigInt // lo que recibe el preventista por unidad
+  retailUnitPriceCents BigInt // precio minorista de referencia (para mostrar el ahorro)
+  commissionBps        Int
+  commissionMode       CommissionMode
+  commissionSource     CommissionSource
+  commissionFrozenAt   DateTime?
+
+  // Volumen
+  totalUnits      Int
+  minUnitsToClose Int
+  minPerCommerce  Int @default(1)
+  maxPerCommerce  Int
+  committedUnits  Int @default(0) // desnormalizado; se actualiza siempre bajo SELECT ... FOR UPDATE
+  paidUnits       Int @default(0)
+  closeOnMinimum  Boolean @default(true)
+
+  // Reglas congeladas al publicar
+  paymentWindowHours Int        @default(48)
+  unpaidRule         UnpaidRule @default(REABRIR)
+
+  // Fechas
+  deadlineAt           DateTime
+  originalDeadlineAt   DateTime?
+  extendedOnce         Boolean   @default(false)
+  acceptedBelowMinimum Boolean   @default(false)
+  estimatedDeliveryAt  DateTime?
+  scheduledDeliveryAt  DateTime?
+  publishedAt          DateTime?
+  completedAt          DateTime?
+  closedAt             DateTime?
+  paidAt               DateTime?
+  deliveredAt          DateTime?
+  expiredAt            DateTime?
+  decisionDeadlineAt   DateTime?
+  finalizedAt          DateTime?
+  cancelledAt          DateTime?
+  cancelReason         String?   @db.VarChar(500)
+  reviewNote           String?   @db.VarChar(500)
+  notified80           Boolean   @default(false)
+  featured             Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  distributor    Business        @relation(fields: [distributorId], references: [id])
+  product        Product         @relation(fields: [productId], references: [id])
+  category       Category        @relation(fields: [categoryId], references: [id])
+  zones          PoolZone[]
+  participations Participation[]
+  settlement     Settlement?
+  ratings        Rating[]
+  disputes       Dispute[]
+
+  @@index([status, deadlineAt])
+  @@index([status, featured])
+  @@index([distributorId, status])
+  @@index([categoryId, status])
+  @@index([status, decisionDeadlineAt])
+}
+
+/// Zona de entrega de un pool. localityId nulo = toda la provincia.
+model PoolZone {
+  id         Int       @id @default(autoincrement())
+  poolId     String
+  provinceId Int
+  localityId Int?
+  pool       Pool      @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  province   Province  @relation(fields: [provinceId], references: [id])
+  locality   Locality? @relation(fields: [localityId], references: [id])
+
+  @@index([poolId])
+  @@index([provinceId, localityId])
+}
+
+model Participation {
+  id              String              @id @default(cuid())
+  poolId          String
+  commerceId      String
+  quantity        Int
+  unitPriceCents  BigInt
+  totalCents      BigInt
+  commissionCents BigInt
+  netCents        BigInt
+  status          ParticipationStatus @default(COMPROMETIDA)
+  withdrawnAt     DateTime?
+  releasedAt      DateTime?
+  paidAt          DateTime?
+  deliveredAt     DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  pool     Pool      @relation(fields: [poolId], references: [id])
+  commerce Business  @relation(fields: [commerceId], references: [id])
+  payments Payment[]
+  rating   Rating?
+  disputes Dispute[]
+
+  @@unique([poolId, commerceId])
+  @@index([commerceId, status])
+  @@index([poolId, status])
+}
+
+// -----------------------------------------------------------------------------
+// Pedidos de catálogo
+// -----------------------------------------------------------------------------
+
+model Order {
+  id                  String      @id @default(cuid())
+  number              Int         @unique @default(autoincrement())
+  commerceId          String
+  distributorId       String
+  status              OrderStatus @default(PENDIENTE_PAGO)
+  subtotalCents       BigInt
+  commissionCents     BigInt
+  netCents            BigInt
+  commissionBps       Int
+  notes               String?     @db.VarChar(500)
+  scheduledDeliveryAt DateTime?
+  paidAt              DateTime?
+  deliveredAt         DateTime?
+  cancelledAt         DateTime?
+  cancelReason        String?     @db.VarChar(500)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  commerce    Business    @relation("OrderCommerce", fields: [commerceId], references: [id])
+  distributor Business    @relation("OrderDistributor", fields: [distributorId], references: [id])
+  items       OrderItem[]
+  payments    Payment[]
+  settlement  Settlement?
+  rating      Rating?
+  disputes    Dispute[]
+
+  @@index([commerceId, status])
+  @@index([distributorId, status])
+  @@index([status, createdAt])
+}
+
+model OrderItem {
+  id              String  @id @default(cuid())
+  orderId         String
+  productId       String
+  name            String  @db.VarChar(160)
+  sku             String  @db.VarChar(60)
+  saleUnit        SaleUnit
+  quantity        Int
+  unitPriceCents  BigInt
+  totalCents      BigInt
+  commissionCents BigInt
+  netCents        BigInt
+  order           Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product         Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+}
+
+// -----------------------------------------------------------------------------
+// Pagos, webhooks y liquidaciones
+// -----------------------------------------------------------------------------
+
+model Payment {
+  id                   String        @id @default(cuid())
+  kind                 PaymentKind
+  commerceId           String
+  participationId      String?
+  orderId              String?
+  amountCents          BigInt
+  commissionCents      BigInt
+  netCents             BigInt
+  provider             String        @db.VarChar(30)
+  status               PaymentStatus @default(PENDIENTE)
+  providerPreferenceId String?       @db.VarChar(120)
+  providerPaymentId    String?       @db.VarChar(120)
+  providerStatus       String?       @db.VarChar(60)
+  checkoutUrl          String?       @db.Text
+  dueAt                DateTime?
+  paidAt               DateTime?
+  refundedAt           DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  commerce      Business       @relation(fields: [commerceId], references: [id])
+  participation Participation? @relation(fields: [participationId], references: [id])
+  order         Order?         @relation(fields: [orderId], references: [id])
+
+  @@unique([provider, providerPaymentId])
+  @@index([status, dueAt])
+  @@index([participationId])
+  @@index([orderId])
+  @@index([commerceId, status])
+  @@index([status, paidAt])
+}
+
+/// Registro de webhooks recibidos. La clave única evita procesar dos veces el mismo evento.
+model WebhookEvent {
+  id          String    @id @default(cuid())
+  provider    String    @db.VarChar(30)
+  eventKey    String    @db.VarChar(191)
+  topic       String?   @db.VarChar(60)
+  resourceId  String?   @db.VarChar(120)
+  payload     String    @db.Text
+  result      String?   @db.VarChar(255)
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([provider, eventKey])
+  @@index([createdAt])
+}
+
+model Settlement {
+  id              String           @id @default(cuid())
+  distributorId   String
+  sourceType      SettlementSource
+  poolId          String?          @unique
+  orderId         String?          @unique
+  grossCents      BigInt
+  commissionCents BigInt
+  netCents        BigInt
+  status          SettlementStatus @default(PENDIENTE)
+  reference       String?          @db.VarChar(120)
+  notes           String?          @db.VarChar(500)
+  paidOutAt       DateTime?
+  paidOutById     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  distributor Business @relation(fields: [distributorId], references: [id])
+  pool        Pool?    @relation(fields: [poolId], references: [id])
+  order       Order?   @relation(fields: [orderId], references: [id])
+  paidOutBy   User?    @relation("SettlementPayer", fields: [paidOutById], references: [id])
+
+  @@index([distributorId, status])
+  @@index([status, createdAt])
+}
+
+// -----------------------------------------------------------------------------
+// Calificaciones y disputas
+// -----------------------------------------------------------------------------
+
+model Rating {
+  id              String   @id @default(cuid())
+  commerceId      String
+  distributorId   String
+  poolId          String?
+  participationId String?  @unique
+  orderId         String?  @unique
+  stars           Int
+  comment         String?  @db.VarChar(1000)
+  createdAt       DateTime @default(now())
+
+  commerce      Business       @relation("RatingCommerce", fields: [commerceId], references: [id])
+  distributor   Business       @relation("RatingDistributor", fields: [distributorId], references: [id])
+  pool          Pool?          @relation(fields: [poolId], references: [id])
+  participation Participation? @relation(fields: [participationId], references: [id])
+  order         Order?         @relation(fields: [orderId], references: [id])
+
+  @@index([distributorId, createdAt])
+}
+
+model Dispute {
+  id                  String        @id @default(cuid())
+  openedById          String
+  commerceId          String
+  distributorId       String
+  poolId              String?
+  participationId     String?
+  orderId             String?
+  reason              String        @db.VarChar(60)
+  description         String        @db.Text
+  status              DisputeStatus @default(ABIERTA)
+  distributorResponse String?       @db.Text
+  resolution          String?       @db.Text
+  resolvedById        String?
+  resolvedAt          DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  openedBy      User           @relation("DisputeOpener", fields: [openedById], references: [id])
+  resolvedBy    User?          @relation("DisputeResolver", fields: [resolvedById], references: [id])
+  commerce      Business       @relation("DisputeCommerce", fields: [commerceId], references: [id])
+  distributor   Business       @relation("DisputeDistributor", fields: [distributorId], references: [id])
+  pool          Pool?          @relation(fields: [poolId], references: [id])
+  participation Participation? @relation(fields: [participationId], references: [id])
+  order         Order?         @relation(fields: [orderId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([distributorId])
+  @@index([commerceId])
+}
+
+// -----------------------------------------------------------------------------
+// Notificaciones, cola de tareas y auditoría
+// -----------------------------------------------------------------------------
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String    @db.VarChar(40)
+  title     String    @db.VarChar(200)
+  body      String    @db.Text
+  link      String?   @db.VarChar(300)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+/// Cola de tareas en base de datos (reemplaza a Redis). La procesa el worker.
+model Job {
+  id          String    @id @default(cuid())
+  type        String    @db.VarChar(40)
+  payload     String    @db.Text
+  status      JobStatus @default(PENDIENTE)
+  runAt       DateTime  @default(now())
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  lastError   String?   @db.Text
+  lockedAt    DateTime?
+  lockedBy    String?   @db.VarChar(60)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([status, runAt])
+  @@index([type, status])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorRole  String?  @db.VarChar(20)
+  action     String   @db.VarChar(60)
+  entityType String   @db.VarChar(40)
+  entityId   String   @db.VarChar(40)
+  summary    String?  @db.VarChar(500)
+  before     String?  @db.Text
+  after      String?  @db.Text
+  ip         String?  @db.VarChar(64)
+  createdAt  DateTime @default(now())
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@index([actorId])
+}
+
+/// Estado de procesos auxiliares (por ejemplo, el latido del worker).
+model SystemStatus {
+  key       String   @id @db.VarChar(60)
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}

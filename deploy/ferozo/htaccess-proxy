@@ -1,0 +1,20 @@
+# =============================================================================
+# PEDILA — VARIANTE A' (solo si el panel permite .htaccess y el servidor tiene
+# mod_proxy + mod_rewrite habilitados). Guardar como .htaccess en la carpeta
+# pública del dominio (por ejemplo public_html/).
+#
+# La bandera [P] necesita mod_proxy cargado en la configuración global de Apache:
+# si al probar ves "Error 500" o el texto del .htaccess, mod_proxy no está activo
+# y hay que pedirlo a soporte o usar la variante B por SSH.
+# =============================================================================
+RewriteEngine On
+
+# Redirigir a HTTPS (si el panel no lo hace)
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+# Pasar el protocolo original a la app
+RequestHeader set X-Forwarded-Proto "https"
+
+# Todo a la app Node
+RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]

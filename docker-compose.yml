@@ -1,0 +1,61 @@
+# =============================================================================
+# PEDILA — entorno de DESARROLLO con Docker (app + MariaDB) en un solo comando:
+#
+#   docker compose up
+#
+# Abre http://localhost:3000 con los datos demo cargados (credenciales en el README).
+# Producción NO usa Docker: ver README › Despliegue en VPS DonWeb + Ferozo.
+# =============================================================================
+services:
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: pedila
+      MARIADB_USER: pedila
+      MARIADB_PASSWORD: pedila
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    ports:
+      - "3306:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+      - ./docker/mariadb-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  app:
+    image: node:24-bookworm-slim
+    working_dir: /app
+    command: >
+      sh -c "npm ci --no-audit --no-fund &&
+             npx prisma migrate deploy &&
+             npx prisma db seed &&
+             npm run dev:all"
+    environment:
+      DATABASE_URL: mysql://pedila:pedila@db:3306/pedila
+      DATABASE_URL_TEST: mysql://pedila:pedila@db:3306/pedila_test
+      DATABASE_URL_E2E: mysql://pedila:pedila@db:3306/pedila_e2e
+      APP_URL: http://localhost:3000
+      AUTH_SECRET: solo-para-desarrollo-con-docker-cambiar
+      AUTH_TRUST_HOST: "true"
+      PAYMENTS_PROVIDER: simulado
+      UPLOAD_DIR: ./uploads
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - next-cache:/app/.next
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  node_modules:
+  next-cache:

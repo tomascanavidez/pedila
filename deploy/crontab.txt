@@ -1,0 +1,3 @@
+# Crontab del usuario de la app (pedila). Instalar con: crontab -e  (o lo hace setup-servidor.sh)
+# Backup diario de MySQL + uploads a las 03:30 (hora del servidor), retención 7 días.
+30 3 * * * /home/pedila/pedila/current/deploy/backup.sh >> /home/pedila/pedila/shared/logs/backup.log 2>&1

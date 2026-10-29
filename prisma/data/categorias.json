@@ -1,0 +1,9 @@
+[
+  { "name": "Bebidas", "slug": "bebidas", "icon": "bebidas", "sortOrder": 1 },
+  { "name": "Golosinas y alfajores", "slug": "golosinas", "icon": "golosinas", "sortOrder": 2 },
+  { "name": "Galletitas y snacks", "slug": "galletitas-snacks", "icon": "snacks", "sortOrder": 3 },
+  { "name": "Almacén", "slug": "almacen", "icon": "almacen", "sortOrder": 4 },
+  { "name": "Infusiones", "slug": "infusiones", "icon": "infusiones", "sortOrder": 5 },
+  { "name": "Limpieza", "slug": "limpieza", "icon": "limpieza", "sortOrder": 6 },
+  { "name": "Perfumería e higiene", "slug": "perfumeria", "icon": "perfumeria", "sortOrder": 7 }
+]

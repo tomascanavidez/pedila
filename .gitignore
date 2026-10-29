@@ -1,0 +1,33 @@
+# dependencias
+/node_modules
+
+# build
+/.next/
+/dist/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# cliente Prisma generado
+/src/generated/
+
+# entorno (nunca subir credenciales)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# archivos subidos por usuarios y backups
+/uploads/*
+!/uploads/.gitkeep
+/backups/
+
+# tests
+/playwright-report/
+/test-results/
+/coverage/
+
+# logs y varios
+*.log
+.DS_Store
+/release-*.tar.gz
